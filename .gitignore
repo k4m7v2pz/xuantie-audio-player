@@ -2,6 +2,14 @@
 /test/compiled
 /build
 
+# 玄铁（xtl）构建产物
+dist/
+*.dSYM/
+xtl-app
+# 渲染库静态库（xtl b 用发行包缓存，不入库；源文件仍跟踪）
+tiepm_modules/**/*.a
+# 注：tiepm_modules/ 源文件故意跟踪（xtl add 无法拉取"内置:核心库"，跟踪后 clone 即可构建）
+
 # macOS 系统文件
 .DS_Store
 ._*

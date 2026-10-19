@@ -1,0 +1,31 @@
+{
+  "$schema": "https://atomgit.com/k4m7v2pz/xtl-toolchain/raw/dev/cli/xtl.schema.json",
+  "依赖项": {
+    "渲染": {
+      "仓库地址": "内置:核心库"
+    }
+  },
+  "包": {
+    "代码文件入口": "演示.xt",
+    "作者": [],
+    "时区": "Asia/Shanghai (UTC+08:00)",
+    "语言标准": "2026",
+    "项目名称": "xuantie-audio-player",
+    "项目版本号": "0.3.0"
+  },
+  "构建配置": {
+    "dev": {
+      "优化级别": 0,
+      "调试开关": true
+    },
+    "release": {
+      "优化级别": 2,
+      "调试开关": false
+    }
+  },
+  "脚本": {
+    "build": "xtl b",
+    "dev": "xtl i",
+    "test": "xtl t"
+  }
+}

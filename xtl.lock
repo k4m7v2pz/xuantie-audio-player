@@ -1,0 +1,15 @@
+{
+  "格式版本": 1,
+  "包": {
+    "渲染": {
+      "来源": "内置:核心库",
+      "提交编号": "63c9a6c6ea02c95b470650bbbf47592171659949"
+    }
+  },
+  "二进制": {
+    "darwin-arm64": {
+      "下载地址": "https://atomgit.com/k4m7v2pz/xtl-toolchain/raw/branch/bin-darwin-arm64-xtc/xuantie-darwin-arm64-xtc.zip",
+      "哈希": "sha256:2a7d013b10cd71cc6468bb6aaaa522cfcc6fed21c417fe7f12d5a3f0ecebc7d6"
+    }
+  }
+}
