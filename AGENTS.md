@@ -4,7 +4,7 @@
 
 轻量级音频混合播放库，解决原生 API 同一时间只能播放一个音频的问题。本仓库为 `keyBonk-org/audio-player` 的 fork（origin：`k4m7v2pz/xuantie-audio-player`）。
 
-**重写状态**：已用玄铁语言重写（2026-10-19）。玄铁版为当前活跃代码（`音频库.xt`/`演示.xt`/`tests/`），上游 C++ 实现保留在 `src/`（历史，Windows 独占）。
+**重写状态**：已用玄铁语言重写（2026-10-19）。玄铁版为当前活跃代码（`音频库.xt`/`演示.xt`/`tests/`），上游 C++ 实现已从工作区移除（保留在 git 提交历史，见 `51ef34b` 之前的 commit）。
 
 ### 当前基线（玄铁）
 
@@ -14,12 +14,9 @@
 - 目标平台：macOS arm64（渲染库随发行包提供 darwin 静态库）
 - 能力边界：实例级音量/暂停/位置、播放完成回调、音效实例强停、全局音量/静音实际生效——渲染桥均未提供，库不提供假 API（详见 `音频库.xt` 头注释与 README）
 
-### 历史基线（C++，已冻结）
+### 历史（C++，已移除）
 
-- 语言/标准：C++17，宽字符（Unicode）构建
-- 音频：Win32 `waveOut` + Windows ACM 重采样（msacm32.lib）
-- 构建：MSYS2/MinGW GNU Make（64/32 位）
-- 目标平台：仅 Windows（x64/x86）
+- 上游 C++ 实现（Win32 waveOut + ACM，Windows 独占）已从工作区移除，完整代码见 git 提交历史。
 
 ### 核心定位
 
@@ -58,249 +55,17 @@ xtl r 演示.xt    # 编译并运行
 
 ```
 ├── 音频库.xt            # 库模块（预加载池/播放池/全局信号，字典数据结构）
-├── 演示.xt              # 入口（合成音效 + WAV 演示）
+├── 演示.xt              # 入口（合成音效播放演示，零资产）
 ├── tests/音频库.xt      # 逻辑测试（环境容错）
 ├── xtl.json / xtl.lock  # 项目配置与依赖锁（渲染：内置:核心库）
 └── tiepm_modules/       # 渲染库副本（入库跟踪）
 ```
-
-## 依赖库
-
-| 库 | 说明 |
-|----|------|
-| Windows ACM | 系统自带音频转换库（msacm32.lib） |
-| winmm | Windows 多媒体 API |
-
-### 编译命令
-
-```powershell
-make          # 构建 64 位静态库并打包（输出至 build/）
-make 32       # 构建 32 位版本（需 i686-w64-mingw32-g++）
-make release  # 同时构建 64/32 位
-```
-
-手动编译单个测试：
-
-```powershell
-g++ -std=c++17 -I"src" -o output.exe source.cpp src/audioPlayer.cpp -lmsacm32 -lwinmm -lcomdlg32
-```
-
-### 编译中间产物
-
-编译过程中生成的中间文件应放置在以下被 `.gitignore` 忽略的路径：
-
-| 文件类型 | 存放路径 | 说明 |
-|----------|----------|------|
-| `.exe` 测试可执行文件 | `test/compiled/` | 测试程序输出 |
-| 静态库 / 打包产物 | `build/` | make 构建输出 |
-
-**不要将中间产物放在项目根目录**，以免污染源码仓库。
-
-### 测试文件编译
-
-测试文件编译至：`./test/compiled/`
-
-## API 接口
-
-### 核心接口
-
-| 接口 | 说明 |
-|------|------|
-| `AudioPool::getInstance()` | 获取单例实例 |
-| `preloadAudio(filename, ready)` | 异步预加载音频文件 |
-| `addAudio(preloadedId)` | 添加预加载音频并立即播放 |
-| `addAudio(filename)` | 简化用法：异步加载并播放 |
-| `stopAll()` | 停止所有播放（挂起） |
-| `resume()` | 恢复播放 |
-
-### 查询接口
-
-| 接口 | 说明 |
-|------|------|
-| `getPreloadedCount()` | 获取预加载音频数量 |
-| `getPlayingCount()` | 获取当前播放实例数量 |
-| `isPlaying(instanceId)` | 检查播放实例是否正在播放 |
-
-### 控制接口
-
-| 接口 | 说明 |
-|------|------|
-| `setVolume(instanceId, volume)` | 设置播放实例音量 |
-| `setMuted(muted)` | 设置全局静音状态 |
-| `resetAll()` | 重置所有播放实例位置到开头 |
-
-## 数据结构
-
-### PreloadedAudio
-
-存储共享的音频数据，同一个预加载音频可创建多个播放实例。
-
-```cpp
-struct PreloadedAudio {
-    StandardWavInfo data;  // 重采样后的音频数据（44.1kHz, 双声道, 16位）
-};
-```
-
-### PlayInstance
-
-每次 `addAudio` 创建，追踪独立的播放位置。
-
-```cpp
-struct PlayInstance {
-    PreloadedAudio* source;  // 指向共享的预加载音频数据
-    size_t position;         // 当前播放位置（样本索引）
-    float volume;            // 音量（0.0-1.0）
-    bool active;             // 是否激活播放
-};
-```
-
-### StandardWavInfo
-
-标准音频格式：`std::vector<int16_t>` - 44.1kHz, 双声道, 16位 PCM
-
-## 核心实现
-
-### 音频格式
-
-| 参数 | 值 |
-|------|-----|
-| 采样率 | 44.1kHz |
-| 声道数 | 双声道 |
-| 位深度 | 16位 |
-| 缓冲区大小 | 8820 样本（100ms） |
-
-### 双缓冲技术
-
-使用两个音频缓冲区交替播放，避免音频断续：
-
-1. `playAll()` 或首次 `addAudio` 时预先准备2个缓冲区
-2. `waveOutCallback` 在缓冲区播放完成后准备下一个缓冲区
-3. 保证音频设备始终有数据可播放
-
-### 异步加载
-
-`preloadAudio` 使用后台线程异步加载，不阻塞音频播放：
-
-1. 主线程预留位置并返回 ID
-2. 后台线程加载 WAV 文件并使用 Windows ACM 重采样
-3. 通过 `std::atomic<bool>` 标记加载完成状态
-4. `addAudio(preloadedId)` 检查数据就绪后创建播放实例
-
-### Windows ACM 重采样
-
-使用 Windows ACM API 进行音频格式转换：
-
-1. `acmStreamOpen` - 打开转换流
-2. `acmStreamSize` - 计算目标缓冲区大小
-3. `acmStreamPrepareHeader` - 准备转换头
-4. `acmStreamConvert` - 执行转换
-5. `acmStreamClose` - 关闭转换流
-
-### 线程安全
-
-- 使用 `std::mutex` 保护共享数据
-- `std::atomic<bool>` 用于跨线程状态同步
-- 使用 `std::unique_ptr` 管理动态分配的预加载音频数据，避免 vector 扩容导致的悬空指针
-- 所有公开接口都是线程安全的
-
-## 使用示例
-
-### 简化用法（快速播放）
-
-```cpp
-AudioPool& pool = AudioPool::getInstance();
-pool.addAudio(L"test.wav");  // 异步加载，立即返回
-pool.addAudio(L"test2.wav");  // 混合播放
-```
-
-### 标准用法（预加载 + 控制）
-
-```cpp
-AudioPool& pool = AudioPool::getInstance();
-std::atomic<bool> ready(false);
-
-// 预加载
-size_t id1 = pool.preloadAudio(L"test.wav", ready);
-while (!ready.load()) Sleep(10);
-
-// 添加播放
-size_t instanceId = pool.addAudio(id1);
-pool.setVolume(instanceId, 0.5f);
-
-// 停止
-pool.stopAll();
-
-// 恢复
-pool.resume();
-```
-
-## 注意事项
-
-1. **路径问题**：使用相对路径时注意工作目录，测试程序从 `test/compiled/` 运行
-2. **音频播放完毕**：播放实例不会自动清理，需手动 `stopAll()`
-3. **设备状态**：`stopAll()` 不会关闭音频设备，只是停止并重置位置
-4. **内存管理**：音频数据由库管理，调用者无需释放
-5. **停止与恢复**：`stopAll()` 后需要调用 `resume()` 才能重新播放
-
-## 测试文件
-
-| 文件 | 说明 |
-|------|------|
-| `test/1_readAudioInfo.cpp` | WAV 文件信息读取测试 |
-| `test/2_resample_test.cpp` | 音频重采样测试 |
-| `test/3_audio_pool_test.cpp` | addAudio 字符串版本测试 |
-| `test/4_audio_mix_test.cpp` | 预加载 + 延迟添加测试 |
-| `test/5_simple_test.cpp` | 单音频播放测试 |
-| `test/6_play_control_test.cpp` | 播放控制测试 |
-| `test/7_control_test.cpp` | 控制接口测试 |
-| `test/8_mp3_test.cpp` | MP3 播放测试 |
-| `test/9_Cirno.cpp` | 综合测试 |
-
-## 文件结构
-
-```
-audio-player/
-├── 音频库.xt              # 玄铁库模块（活跃代码，见「玄铁版开发须知」）
-├── 演示.xt                # 玄铁入口
-├── tests/                 # 玄铁测试（xtl t）
-├── xtl.json / xtl.lock    # xtl 配置与依赖锁
-├── tiepm_modules/         # 渲染库副本（入库跟踪）
-├── src/                   # C++ 历史实现（冻结）
-│   ├── audioPlayer.hpp    # 头文件
-│   ├── audioPlayer.cpp    # 实现
-│   └── yumo_except.hpp    # 异常定义
-├── test/                  # C++ 历史测试
-│   ├── audio/             # 测试音频文件
-│   ├── compiled/          # 编译输出目录
-│   ├── build_manager.py   # 编译管理脚本
-│   └── *.cpp              # 测试源文件
-├── makefile               # C++ GNU Make 构建（64/32 位）
-├── README.md              # 项目说明（玄铁版为当前主说明）
-└── AGENTS.md              # 本文档
-```
-
 ## AI开发须知
 
-- **玄铁版为当前活跃代码**：修改后必须 `xtl b` 构建通过 + `xtl t` 测试通过再提交（tests 已做环境容错，设备不可用时自动降级失败路径）。
+- **玄铁版为当前唯一活跃代码**：修改后必须 `xtl b` 构建通过 + `xtl t` 测试通过再提交（tests 已做环境容错，设备不可用时自动降级失败路径）。
 - 玄铁代码遵守「玄铁工具链踩坑记录」七条（见上文），尤其是：数据用字典、形参不写类型注解、测试不假设设备可用。
-- C++ 历史代码：不再主动改动；确需修改时，编译对应测试文件到 `test/compiled/` 路径下以便检测。
-- 无 Windows 环境时，C++ 改动至少保证不破坏既有目录结构与接口，并做静态核对。
+- 仓库内无 C++ 代码；涉及上游 C++ 的历史信息一律以 git 提交历史为准，不要在文档中重建 C++ 内容。
 - 本仓库文档约定对齐 `xtl-toolchain/AGENTS.md` 的提交规范。
-
-### 编译管理脚本
-
-使用 `build_manager.py` 脚本编译测试文件：
-
-```powershell
-cd test
-python build_manager.py
-```
-
-脚本支持：
-- 按序号选择编译文件（如 `1 3 4-6`）
-- `all` 选项编译全部测试文件
-- 自动输出到 `test/compiled/` 目录
-
 ## 提交约定
 
 ### 自动提交授权
@@ -330,10 +95,3 @@ python build_manager.py
 ### 提交小尾巴（如实标注，禁止编造）
 
 issue/PR/追评小尾巴如实标注人的参与程度，**禁止把「批准」写成「审阅/查看」**：
-
-- 仅当人类**实际查看过**内容（描述/代码）才写"已查看/已审阅"。
-- 人类仅授权、未逐字审阅 → 只写"批准"，档位按「是否理解（能否接住）」划分：
-  - 已理解 → `人类已在Agent对话中批准提交（已理解）`
-  - 未能完全理解（如正文表格未接住）→ `人类已在Agent对话中批准提交（未能完全理解，可附具体）`
-- 末尾如实标注提交方式与提交者：`提交方式：Personal access tokens (classic)｜提交者：豆包工作 Mac版`；模型/推理强度可选（AI 知道才写）。
-- 已发内容的小尾巴不改。
