@@ -2,7 +2,14 @@
 
 ## 项目概述
 
-这是一个轻量级的 Windows 音频混合播放库，用于解决 Win32 `waveOut` 系列 API 的冲突问题。
+这是一个轻量级的 Windows 音频混合播放库，用于解决 Win32 `waveOut` 系列 API 的冲突问题。本仓库为 `keyBonk-org/audio-player` 的 fork（origin：`k4m7v2pz/xuantie-audio-player`）。
+
+### 当前基线（C++）
+
+- 语言/标准：C++17，宽字符（Unicode）构建
+- 音频：Win32 `waveOut` + Windows ACM 重采样（msacm32.lib）
+- 构建：MSYS2/MinGW GNU Make（64/32 位）
+- 目标平台：仅 Windows（x64/x86）
 
 ### 核心定位
 
@@ -27,6 +34,14 @@
 ### 编译命令
 
 ```powershell
+make          # 构建 64 位静态库并打包（输出至 build/）
+make 32       # 构建 32 位版本（需 i686-w64-mingw32-g++）
+make release  # 同时构建 64/32 位
+```
+
+手动编译单个测试：
+
+```powershell
 g++ -std=c++17 -I"src" -o output.exe source.cpp src/audioPlayer.cpp -lmsacm32 -lwinmm -lcomdlg32
 ```
 
@@ -37,6 +52,7 @@ g++ -std=c++17 -I"src" -o output.exe source.cpp src/audioPlayer.cpp -lmsacm32 -l
 | 文件类型 | 存放路径 | 说明 |
 |----------|----------|------|
 | `.exe` 测试可执行文件 | `test/compiled/` | 测试程序输出 |
+| 静态库 / 打包产物 | `build/` | make 构建输出 |
 
 **不要将中间产物放在项目根目录**，以免污染源码仓库。
 
@@ -196,6 +212,9 @@ pool.resume();
 | `test/4_audio_mix_test.cpp` | 预加载 + 延迟添加测试 |
 | `test/5_simple_test.cpp` | 单音频播放测试 |
 | `test/6_play_control_test.cpp` | 播放控制测试 |
+| `test/7_control_test.cpp` | 控制接口测试 |
+| `test/8_mp3_test.cpp` | MP3 播放测试 |
+| `test/9_Cirno.cpp` | 综合测试 |
 
 ## 文件结构
 
@@ -203,19 +222,23 @@ pool.resume();
 audio-player/
 ├── src/
 │   ├── audioPlayer.hpp    # 头文件
-│   └── audioPlayer.cpp    # 实现
+│   ├── audioPlayer.cpp    # 实现
+│   └── yumo_except.hpp    # 异常定义
 ├── test/
 │   ├── audio/             # 测试音频文件
 │   ├── compiled/          # 编译输出目录
 │   ├── build_manager.py   # 编译管理脚本
 │   └── *.cpp              # 测试源文件
+├── makefile               # GNU Make 构建（64/32 位）
 ├── README.md              # 项目说明
-└── agent.md               # 本文档
+└── AGENTS.md              # 本文档
 ```
 
 ## AI开发须知
 
-每次修改完库源码，编译对应的测试文件到 compile 路径下，以便用户检测，本要求在库提供一个建议的测试文件编译方案前永久生效
+- 每次修改完库源码，编译对应的测试文件到 `test/compiled/` 路径下，以便用户检测；在库提供一个建议的测试文件编译方案前本要求永久生效。
+- 无 Windows 环境时，至少保证改动不破坏既有目录结构与接口，并做静态核对。
+- 本仓库文档约定对齐 `xtl-toolchain/AGENTS.md` 的提交规范。
 
 ### 编译管理脚本
 
@@ -230,3 +253,40 @@ python build_manager.py
 - 按序号选择编译文件（如 `1 3 4-6`）
 - `all` 选项编译全部测试文件
 - 自动输出到 `test/compiled/` 目录
+
+## 提交约定
+
+### 自动提交授权
+
+本仓库允许 Agent 在完成用户既定的改动后，**自动执行 `git add` / `commit` / `push` 到当前跟踪分支，无需逐次等待人类批准**。自动提交仍须遵守：
+
+- 先过「提交前防泄漏守卫」核对清单与内容；
+- 如实写 Co-Authored-By 与提交小尾巴；
+- **禁止 force push / `--force-with-lease`**；确需改写历史必须先说明理由并给出备份方案；
+- 只提交用户本次明确要求范围内的改动，不擅自夹带超出范围的内容。
+
+### 提交尾部 Co-Authored-By
+
+提交信息末尾用 trailer（空行隔开）`Co-Authored-By`，名字填写**实际调用工具、执行本次提交的模型/Agent**（不是写代码的模型，二者可能不同——如强力模型写代码、切小模型来提交）；不知道实际提交者则该名字不写。`noreply@` 域名无对应则不写域名只留名字。格式示例：`Co-Authored-By: <实际提交的Agent名> <noreply@<对应域名>>`。
+
+### 提交前防泄漏守卫（硬约束）
+
+进入 git 的内容默认互联网可见（公开仓库直接可见）。**禁止提交**：私钥/token/密码、个人邮箱、真实姓名、私人服务器地址、代理端口（HTTP/SOCKS 复用端口）、内部 IP、SSH 口令、VPS/VM 连接信息。
+
+- 敏感凭据与连接信息一律不入 commit/issue/PR/公开文档；需本地保存时放入已被 `.gitignore` 的目录（如 `secrets/`）。
+- 文档里举例远端/邮箱/端口一律用占位符：`<example@example.com>`、`<proxy-port>`、`<ssh-port>`、`<host>`。
+- **提交前核对流程（不得跳过）**：
+  1. `git add` 后先 `git diff --cached --name-only` 确认暂存区文件清单，无 `secrets/`、`*.pem`、`id_rsa`、`id_ed25519`、`*.key`、`credentials` 等；
+  2. `git diff --cached` 扫内容，发现真实 IP / 端口 / 邮箱 / token → `git restore --staged <file>` 摘出，替换为占位符或删除后重新 `git add`；
+  3. 确认无泄漏再 `git commit`。
+
+### 提交小尾巴（如实标注，禁止编造）
+
+issue/PR/追评小尾巴如实标注人的参与程度，**禁止把「批准」写成「审阅/查看」**：
+
+- 仅当人类**实际查看过**内容（描述/代码）才写"已查看/已审阅"。
+- 人类仅授权、未逐字审阅 → 只写"批准"，档位按「是否理解（能否接住）」划分：
+  - 已理解 → `人类已在Agent对话中批准提交（已理解）`
+  - 未能完全理解（如正文表格未接住）→ `人类已在Agent对话中批准提交（未能完全理解，可附具体）`
+- 末尾如实标注提交方式与提交者：`提交方式：Personal access tokens (classic)｜提交者：豆包工作 Mac版`；模型/推理强度可选（AI 知道才写）。
+- 已发内容的小尾巴不改。
